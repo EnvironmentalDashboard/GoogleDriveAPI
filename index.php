@@ -17,7 +17,7 @@ if (file_exists("credentials.json")) {
 	$files_list = $drive_service->files->listFiles(array())->getFiles(); 
 	echo json_encode($files_list);
 } else {
-  $redirect_uri = 'http://' . $_SERVER['HTTP_HOST'] . '/oauth2callback.php';
+  $redirect_uri = 'http://' . $_SERVER['HTTP_HOST'] . '/GoogleDriveAPI/callback.php';
   header('Location: ' . filter_var($redirect_uri, FILTER_SANITIZE_URL));
 }
 ?>
