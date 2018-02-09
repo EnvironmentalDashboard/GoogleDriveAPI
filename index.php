@@ -1,5 +1,6 @@
 <?php
 require 'vendor/autoload.php';
+require '../includes/db.php';
 error_reporting(-1);
 ini_set('display_errors', 'On');
 
@@ -20,34 +21,44 @@ if (isset($_COOKIE['GoogleAPICredentials'])) {
 	if (!isset($_GET['id'])) {
 		exit("Provide a presentation id");
 	} else {
-		$presentationId = $_GET['id'];
+		$presentation_id = $_GET['id'];
 	}
 
-	// TO PRINT SLIDE PRESENTER NOTES
-	// $service = new Google_Service_Slides($client);
-	// $presentation = $service->presentations->get($presentationId);
-	// $slides = $presentation->getSlides();
-	// foreach ($slides as $slide) {
-	// 	$note_id = $slide->slideProperties->notesPage->notesProperties->speakerNotesObjectId;
-	// 	foreach ($slide->slideProperties->notesPage as $obj) {
-	// 		if ($obj->objectId === $note_id) {
-	// 			var_dump($obj->shape->text->textElements[1]->textRun->content);
-	// 		}
-	// 	}
-	// }
+	// get presenter notes
+	$presenter_notes = [];
+	$slides_service = new Google_Service_Slides($client);
+	$presentation = $slides_service->presentations->get($presentation_id);
+	$slides = $presentation->getSlides();
+	$num_slides = count($slides);
+	for ($i = 0; $i < $num_slides; $i++) {
+		$note_id = $slides[$i]->slideProperties->notesPage->notesProperties->speakerNotesObjectId;
+		$presenter_notes[$i] = null;
+		foreach ($slides[$i]->slideProperties->notesPage as $obj) {
+			if ($obj->objectId === $note_id) {
+				if ($obj->shape->text !== null) {
+					$presenter_notes[$i] = trim($obj->shape->text->textElements[1]->textRun->content);
+				}
+			}
+		}
+	}
 
-	// TO OUTPUT PDF OF PRESENTATION
-	// header('Content-Type: application/pdf');
-	// $driveService = new Google_Service_Drive($client);
-	// $response = $driveService->files->export($presentationId, 'application/pdf', array('alt' => 'media'));
-	// $content = $response->getBody()->getContents();
-	// echo $content;
-
-	// have to iterate over individual slides to export as images; might be easier to convert PDFs to images on our end
-	// for ($i=0; $i < count($slides); $i++) {
-	// 	$id = $slides[$i]->objectId;
-	// 	$export = 'https://docs.google.com/presentation/d/' + $presentationId +'/export/png?id=' + $presentationId + '&pageid=' + $id;
-	// }
+	// get pdf of presentation
+	$drive_service = new Google_Service_Drive($client);
+	$response = $drive_service->files->export($presentation_id, 'application/pdf', array('alt' => 'media'));
+	$content = $response->getBody()->getContents();
+	$assets = __DIR__ . '/assets';
+	if (!is_dir($assets)) {
+		mkdir($assets, 0755);
+	}
+	if (is_dir($assets . "/{$presentation_id}")) {
+		array_map('unlink', glob($assets . "/{$presentation_id}/*"));
+	} else {
+		mkdir($assets . "/{$presentation_id}", 0755);
+	}
+	file_put_contents($assets . "/{$presentation_id}/pres.pdf", $content);
+	shell_exec("convert {$assets}/{$presentation_id}/pres.pdf {$assets}/{$presentation_id}/pres-%03d.jpg");
+	$stmt = $db->prepare('INSERT INTO google_slides (api_id, num_slides, notes) VALUES (?, ?, ?)');
+	$stmt->execute([$presentation_id, $num_slides, json_encode($presenter_notes)]);
 } else {
 	callback();
 }
