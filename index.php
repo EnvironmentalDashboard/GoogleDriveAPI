@@ -15,11 +15,20 @@ if (isset($_COOKIE['GoogleAPICredentials'])) {
 	}
 	$client->setAccessToken($access_token);
 	if ($client->isAccessTokenExpired()) {
-		$client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
-		setcookie("GoogleAPICredentials", json_encode($client->getAccessToken()), time()+(60*60*24*1), "/");
+		$refresh_token = $client->getRefreshToken();
+		$client->fetchAccessTokenWithRefreshToken($refresh_token);
+		$new_access_token = $client->getAccessToken();
+		$access_token = array_merge($access_token, $new_access_token);
+    $client->setAccessToken($access_token);
+		setcookie("GoogleAPICredentials", json_encode($access_token), time()+(60*60*24*1), "/");
 	}
-	if (isset($_GET['id'])) {
-		save_pres($db, $client, $_GET['id']);
+	if (isset($_POST['pres_url'])) {
+		$parsed = parse_url($_POST['pres_url'], PHP_URL_PATH);
+		$parts = explode('/', $parsed);
+		if (count($parts) < 4) {
+			exit("Malformed Google presentation URL");
+		}
+		save_pres($db, $client, $parts[3]);
 	}
 } else {
 	callback();
@@ -40,11 +49,18 @@ function save_pres($db, $client, $presentation_id) {
 		$note_id = $slides[$i]->slideProperties->notesPage->notesProperties->speakerNotesObjectId;
 		$presenter_notes[$i] = null;
 		foreach ($slides[$i]->slideProperties->notesPage as $obj) {
+			$full_note = '';
 			if ($obj->objectId === $note_id) {
 				if ($obj->shape->text !== null) {
-					$presenter_notes[$i] = trim($obj->shape->text->textElements[1]->textRun->content);
+					foreach ($obj->shape->text->textElements as $textElem) {
+						if (!isset($textElem->textRun)) {
+							continue;
+						}
+						$full_note .= $textElem->textRun->content;
+					}
 				}
 			}
+			$presenter_notes[$i] = $full_note;
 		}
 	}
 	// get pdf of presentation
@@ -83,8 +99,8 @@ function save_pres($db, $client, $presentation_id) {
 				<div class="col">
 					<h2>Add another presentation</h2>
 					<form class="form-inline" method="POST" action="">
-						<label class="sr-only" for="pres_id">Presentation ID</label>
-						<input type="text" class="form-control mb-2 mr-sm-2" id="pres_id" name="pres_id">
+						<label class="sr-only" for="pres_url">Presentation URL</label>
+						<input type="text" class="form-control mb-2 mr-sm-2" id="pres_url" name="pres_url" placeholder="https://docs.google.com/presentation/d/1B6dT93Zq4qwUbdqHvdk-g96M8y6cBu9Kz4PJC6c9FR4/edit..." style="width: 100%">
 						<button type="submit" name="fetch-pres" class="btn btn-primary mb-2">Fetch Presentation</button>
 					</form>
 					<table class="table">
