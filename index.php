@@ -4,6 +4,15 @@ require '../includes/db.php';
 error_reporting(-1);
 ini_set('display_errors', 'On');
 
+if (isset($_POST['delete']) && $_POST['delete'] === 'Delete') {
+	$stmt = $db->prepare('DELETE FROM google_pres WHERE id = ?');
+	$stmt->execute([$_POST['pres_id']]);
+	$stmt = $db->prepare('DELETE FROM google_slides WHERE pres_id = ?');
+	$stmt->execute([$_POST['pres_id']]);
+	array_map('unlink', glob("assets/{$_POST['api_id']}/*"));
+	rmdir("assets/{$_POST['api_id']}");
+}
+
 $client = new Google_Client();
 $client->setAuthConfig('secret/client_secret.json');
 $client->addScope(Google_Service_Drive::DRIVE);
@@ -77,9 +86,18 @@ function save_pres($db, $client, $presentation_id) {
 		mkdir($assets . "/{$presentation_id}", 0755);
 	}
 	file_put_contents($assets . "/{$presentation_id}/pres.pdf", $content);
-	shell_exec("convert {$assets}/{$presentation_id}/pres.pdf {$assets}/{$presentation_id}/pres-%03d.jpg");
-	$stmt = $db->prepare('REPLACE INTO google_slides (api_id, num_slides, notes) VALUES (?, ?, ?)');
+	shell_exec("convert -density 150 {$assets}/{$presentation_id}/pres.pdf {$assets}/{$presentation_id}/pres-%03d.jpg");
+	$stmt = $db->prepare('REPLACE INTO google_pres (api_id, num_slides, notes) VALUES (?, ?, ?)');
 	$stmt->execute([$presentation_id, $num_slides, json_encode($presenter_notes)]);
+	$insert_id = $db->lastInsertId();
+	foreach ($presenter_notes as $i => $note) {
+		$note_contents = array_filter(explode("\n", $note));
+		$title = trim(substr($note_contents[0], 12));
+		$prob = intval(substr($note_contents[1], 12));
+		$end_use = strtolower(trim(substr($note_contents[2], 8)));
+		$stmt = $db->prepare("INSERT INTO google_slides (pres_id, img, prob, end_use, url) VALUES (?, ?, ?, ?, ?)");
+		$stmt->execute([$insert_id, $title, $prob, $end_use, "https://environmentaldashboard.org/google-drive/assets/{$presentation_id}/pres-".str_pad($i, 3, '0', STR_PAD_LEFT).'.jpg']);
+	}
 	header('Location: ' . filter_var('https://' . $_SERVER['HTTP_HOST'] . '/google-drive/', FILTER_SANITIZE_URL));
 	exit();
 }
@@ -108,17 +126,21 @@ function save_pres($db, $client, $presentation_id) {
 							<tr>
 								<th>Presentation</th>
 								<th>Slides</th>
-								<th>Notes</th>
+								<th>Delete</th>
 							</tr>
 						</thead>
 						<tbody>
-							<?php foreach ($db->query('SELECT api_id, num_slides, notes FROM google_slides') as $pres) {
+							<?php foreach ($db->query('SELECT id, api_id, num_slides FROM google_pres') as $pres) {
+								if ($pres['api_id'] === 'photocache') {
+									echo "<tr><td>photocache</td><td><p><a href='assets/photocache'>files</a></p></td><td>&nbsp;</td></tr>";
+									continue;
+								}
 								echo "<tr><td>{$pres['api_id']}</td><td>";
 								for ($i=0; $i < $pres['num_slides']; $i++) {
 									$padded = str_pad($i, 3, '0', STR_PAD_LEFT);
-									echo "<img src='assets/{$pres['api_id']}/pres-{$padded}.jpg'>";
+									echo "<a href='assets/{$pres['api_id']}/pres-{$padded}.jpg'>Image {$padded}</a>\n";
 								}
-								echo "</td><td><code>{$pres['notes']}</code></td></tr>";
+								echo "</td><td><form action='' method='POST'><input type='hidden' name='pres_id' value='{$pres['id']}' /><input type='hidden' name='api_id' value='{$pres['api_id']}' /><input type='submit' name='delete' value='Delete' class='btn btn-danger' /></form></td></tr>";
 							} ?>
 						</tbody>
 					</table>
