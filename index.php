@@ -82,6 +82,8 @@ function save_pres($db, $client, $presentation_id) {
 	}
 	if (is_dir($assets . "/{$presentation_id}")) {
 		array_map('unlink', glob($assets . "/{$presentation_id}/*"));
+		$stmt = $db->prepare('DELETE FROM google_slides WHERE pres_id IN (SELECT id FROM google_pres WHERE api_id = ?)');
+		$stmt->execute([$presentation_id]);
 	} else {
 		mkdir($assets . "/{$presentation_id}", 0755);
 	}
@@ -95,8 +97,14 @@ function save_pres($db, $client, $presentation_id) {
 		$title = trim(substr($note_contents[0], 12));
 		$prob = intval(substr($note_contents[1], 12));
 		$end_use = strtolower(trim(substr($note_contents[2], 8)));
-		$stmt = $db->prepare("INSERT INTO google_slides (pres_id, img, prob, end_use, url, category) VALUES (?, ?, ?, ?, ?, ?)");
-		$stmt->execute([$insert_id, $title, $prob, $end_use, "https://environmentaldashboard.org/google-drive/assets/{$presentation_id}/pres-".str_pad($i, 3, '0', STR_PAD_LEFT).'.jpg', $_POST['category']]);
+		$tags = strtolower(trim(substr($note_contents[3], 5)));
+		$category = strtolower(implode('-', explode(' ', trim($note_contents[4]))));
+		try {
+			$stmt = $db->prepare("INSERT INTO google_slides (pres_id, img, prob, end_use, url, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?)");
+			$stmt->execute([$insert_id, $title, $prob, $end_use, "https://environmentaldashboard.org/google-drive/assets/{$presentation_id}/pres-".str_pad($i, 3, '0', STR_PAD_LEFT).'.jpg', $category, $tags]);
+		} catch (PDOException $e) {
+			echo $e->getMessage() . "\n";
+		}
 	}
 	header('Location: ' . filter_var('https://' . $_SERVER['HTTP_HOST'] . '/google-drive/', FILTER_SANITIZE_URL));
 	exit();
@@ -118,13 +126,8 @@ function save_pres($db, $client, $presentation_id) {
 					<h2>Add another presentation</h2>
 					<form class="form-inline" method="POST" action="">
 						<label class="sr-only" for="pres_url">Presentation URL</label>
-						<input type="text" class="form-control mb-2 mr-sm-2" id="pres_url" name="pres_url" placeholder="https://docs.google.com/presentation/d/1B6dT93Zq4qwUbdqHvdk-g96M8y6cBu9Kz4PJC6c9FR4/edit...">
-						<select class="custom-select" name="gallery">
-							<?php foreach (['serving-our-community', 'our-downtown', 'next-generation', 'neighbors', 'nature_photos', 'heritage'] as $gallery) {
-								echo "<option value='{$gallery}'>{$gallery}</option>";
-							} ?>
-						</select>
-						<button type="submit" name="fetch-pres" class="btn btn-primary mb-2">Fetch Presentation</button>
+						<input type="text" class="form-control mb-2 mr-sm-2" id="pres_url" name="pres_url" placeholder="https://docs.google.com/presentation/d/1B6dT93Zq4qwUbdqHvdk-g96M8y6cBu9Kz4PJC6c9FR4/edit..." style='width: 100%'>
+						<button type="submit" name="fetch-pres" class="btn btn-primary mt-2 mb-2">Fetch Presentation</button>
 					</form>
 					<table class="table">
 						<thead>
