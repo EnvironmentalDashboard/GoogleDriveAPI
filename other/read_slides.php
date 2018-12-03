@@ -1,7 +1,7 @@
 <?php
 require '../vendor/autoload.php';
-require '../../includes/db.php';
-require '../../community-voices/src/CommunityVoices/App/Website/db.php';
+require '../../includes/db.php'; // has con to main db, $db
+require '../../community-voices/src/CommunityVoices/App/Website/db.php'; // has con to cv db, $dbHandler
 error_reporting(-1);
 ini_set('display_errors', 'On');
 // ini_set('xdebug.var_display_max_depth', '-1');
@@ -27,7 +27,7 @@ if (isset($_COOKIE['GoogleAPICredentials'])) {
 		setcookie("GoogleAPICredentials", json_encode($access_token), time()+(60*60*24*1), "/");
 	}
 	if (isset($_POST['pid'])) {
-		read_slides($db, $CVdb, $client, $_POST['pid']);
+		insert_slides($dbHandler, read_slides($db, $client, $_POST['pid']));
 	}
 } else {
 	callback();
@@ -40,7 +40,7 @@ function callback() {
 	exit();
 }
 
-function read_slides($db, $CVdb, $client, $presentation_id) {
+function read_slides($db, $client, $presentation_id) {
 	$slides_service = new Google_Service_Slides($client);
 	$presentation = $slides_service->presentations->get($presentation_id);
 	$slides = $presentation->getSlides();
@@ -91,10 +91,14 @@ function read_slides($db, $CVdb, $client, $presentation_id) {
 			$presenter_notes[$i] = $full_note;
 		}
 	}
-	insert_slides($CVdb, $images, $quotes, $attributions, $presenter_notes);
+	return [$images, $quotes, $attributions, $presenter_notes];
 }
 
-function insert_slides($db, $images, $quotes, $attributions, $presenter_notes) {
+function insert_slides($db, $slides) {
+	$images = $slides[0];
+	$quotes = $slides[1];
+	$attributions = $slides[2];
+	$presenter_notes = $slides[3];
 	$count_im = count($images);
 	$count_quo = count($quotes);
 	$count_attr = count($attributions);
@@ -113,7 +117,7 @@ function insert_slides($db, $images, $quotes, $attributions, $presenter_notes) {
 	for ($i = 0; $i < $count_im; $i++) { 
 		$note_parts = explode("\n", $presenter_notes[$i]);
 		if (count($note_parts) < 5) {
-			echo "Error parsing presenter notes for slide {$i} (has quote: {$quotes[$i]})\n";
+			echo "Error parsing presenter notes for slide {$i} (has quote: {$quotes[$i]})\n<br />";
 			continue;
 		}
 		// get image already in db
@@ -121,7 +125,7 @@ function insert_slides($db, $images, $quotes, $attributions, $presenter_notes) {
 		$stmt->execute([substr($note_parts[0], 13)]); // cut off 'Image title: '
 		$im_id = (int) $stmt->fetchColumn();
 		if (!($im_id > 0)) {
-			echo "Can't find image for slide {$i} (has quote: {$quotes[$i]})\n";
+			echo "Can't find image for slide {$i} (has quote: {$quotes[$i]})\n<br />";
 			continue;
 		}
 		// get quote already in db
@@ -129,7 +133,7 @@ function insert_slides($db, $images, $quotes, $attributions, $presenter_notes) {
 		$stmt->execute([trim($quotes[$i], "“”. \t\n\r\0\x0B")]);
 		$quo_id = (int) $stmt->fetchColumn();
 		if (!($quo_id > 0)) {
-			echo "Can't find quote for slide {$i} (has quote: {$quotes[$i]})\n";
+			echo "Can't find quote for slide {$i} (has quote: {$quotes[$i]})\n<br />";
 			continue;
 		}
 		$db->query("INSERT INTO `community-voices_media` (added_by, type, status) (1, 'slide', 'approved')");
@@ -145,7 +149,7 @@ function insert_slides($db, $images, $quotes, $attributions, $presenter_notes) {
 		// add tags
 		foreach (explode(',', substr($note_parts[4], 6)) as $tag) { // example $note_parts[4]: 'Tags: People, Animal, Volunteering'
 			$stmt = $db->prepare('SELECT id FROM `community-voices_groups` WHERE type = \'tag\' AND LOWER(label) = ?');
-			$stmt->execute([$tag]);
+			$stmt->execute([trim($tag)]);
 			$tag_id = (int) $stmt->fetchColumn();
 			if (!($tag_id > 0)) {
 				echo "Invalid tag {$tag} for slide {$i}\n";
