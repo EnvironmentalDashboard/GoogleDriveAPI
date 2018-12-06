@@ -1,7 +1,7 @@
 <?php
 require '../vendor/autoload.php';
 require '../../includes/db.php'; // has con to main db, $db
-require '../../community-voices/src/CommunityVoices/App/Website/db.php'; // has con to cv db, $dbHandler
+require 'CVdb.php'; // has con to cv db, $dbHandler
 error_reporting(-1);
 ini_set('display_errors', 'On');
 // ini_set('xdebug.var_display_max_depth', '-1');
@@ -172,7 +172,6 @@ function insert_slides($db, $slides) {
 <body>
 	<form action="" method="POST">
 		<input type="text" name="pid" placeholder="Presentation ID"><br />
-		<input type="text" name="ccid" placeholder="Content Category ID">
 		<input type="submit">
 	</form>
 </body>
