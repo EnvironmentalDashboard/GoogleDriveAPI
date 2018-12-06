@@ -139,7 +139,7 @@ function insert_slides($db, $slides) {
 		}
 		$db->query("INSERT INTO `community-voices_media` (added_by, type, status) VALUES (1, 'slide', 'approved')");
 		$slide_id = $db->lastInsertId();
-		$stmt = $db->query("INSERT INTO `community-voices_slides` (media_id, content_category_id, image_id, quote_id, probability) VALUES (?, ?, ?, ?, ?)");
+		$stmt = $db->prepare("INSERT INTO `community-voices_slides` (media_id, content_category_id, image_id, quote_id, probability) VALUES (?, ?, ?, ?, ?)");
 		$stmt->execute([
 			$slide_id,
 			intval($contentCategories[strtolower(trim($note_parts[5]))]),
