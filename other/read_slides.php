@@ -137,12 +137,19 @@ function insert_slides($db, $slides) {
 			echo "Can't find quote for slide {$i} (has quote: {$quotes[$i]})\n<br />";
 			continue;
 		}
+		$cc_key = strtolower(trim($note_parts[5]));
+		if (isset($contentCategories[$cc_key])) {
+			$cc_id = intval($contentCategories[$cc_key]);
+		} else {
+			echo "Can't parse content category (recieved {$cc_key}) for slide {$i} (has quote: {$quotes[$i]})\n<br />";
+			continue;
+		}
 		$db->query("INSERT INTO `community-voices_media` (added_by, type, status) VALUES (1, 'slide', 'approved')");
 		$slide_id = $db->lastInsertId();
 		$stmt = $db->prepare("INSERT INTO `community-voices_slides` (media_id, content_category_id, image_id, quote_id, probability) VALUES (?, ?, ?, ?, ?)");
 		$stmt->execute([
 			$slide_id,
-			intval($contentCategories[strtolower(trim($note_parts[5]))]),
+			$cc_id,
 			$im_id,
 			$quo_id,
 			intval(substr($note_parts[1], 13)) // cut off 'Probability: '
