@@ -121,11 +121,12 @@ function insert_slides($db, $slides) {
 			continue;
 		}
 		// get image already in db
-		$stmt = $db->prepare('SELECT media_id FROM `community-voices_images` WHERE filename = ?');
-		$stmt->execute([substr($note_parts[0], 13)]); // cut off 'Image title: '
+		$stmt = $db->prepare('SELECT media_id FROM `community-voices_images` WHERE filename LIKE ?');
+		$fn = substr($note_parts[0], 13); // cut off 'Image title: '
+		$stmt->execute(["%{$fn}%"]);
 		$im_id = (int) $stmt->fetchColumn();
 		if (!($im_id > 0)) {
-			echo "Can't find image for slide {$i} (has quote: {$quotes[$i]})\n<br />";
+			echo "Can't find image ({$fn}) for slide {$i} (has quote: {$quotes[$i]})\n<br />";
 			continue;
 		}
 		// get quote already in db
