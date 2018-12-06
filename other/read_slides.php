@@ -137,7 +137,7 @@ function insert_slides($db, $slides) {
 			echo "Can't find quote for slide {$i} (has quote: {$quotes[$i]})\n<br />";
 			continue;
 		}
-		$db->query("INSERT INTO `community-voices_media` (added_by, type, status) (1, 'slide', 'approved')");
+		$db->query("INSERT INTO `community-voices_media` (added_by, type, status) VALUES (1, 'slide', 'approved')");
 		$slide_id = $db->lastInsertId();
 		$stmt = $db->query("INSERT INTO `community-voices_slides` (media_id, content_category_id, image_id, quote_id, probability) VALUES (?, ?, ?, ?, ?)");
 		$stmt->execute([
